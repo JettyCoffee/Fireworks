@@ -7,30 +7,20 @@ import explosionSound from '../../public/sounds/explosion.mp3';
 
 class SoundPool {
     constructor() {
-        this.launchSound = new Audio(launchSound);
-        this.explosionSound = new Audio(explosionSound);
-        this.bgMusic = new Audio(bgMusic);
         this._initialized = false;
-        
-        // 预加载所有音频
-        this.launchSound.preload = 'auto';
-        this.explosionSound.preload = 'auto';
-        this.bgMusic.preload = 'auto';
-        
-        // 设置音量
-        this.launchSound.volume = 0.3;
-        this.explosionSound.volume = 0.4;
-        this.bgMusic.volume = 0.2;
-        
-        // 设置背景音乐循环
-        this.bgMusic.loop = true;
+        this.audioContext = null;
+        this.sounds = {
+            launch: null,
+            explosion: null,
+            bgm: null
+        };
     }
 
     get initialized() {
         return this._initialized;
     }
 
-    initialize() {
+    async initialize() {
         if (this._initialized) return;
         
         try {
@@ -38,85 +28,75 @@ class SoundPool {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             this.audioContext = new AudioContext();
             
-            // 加载所有音频
-            Promise.all([
-                this.bgMusic.load(),
-                this.launchSound.load(),
-                this.explosionSound.load()
-            ]).then(() => {
-                console.log('All audio files loaded');
-                this._initialized = true;
-            }).catch(error => {
-                console.error('Error loading audio files:', error);
-            });
+            // 创建音频元素
+            this.sounds.launch = new Audio(launchSound);
+            this.sounds.explosion = new Audio(explosionSound);
+            this.sounds.bgm = new Audio(bgMusic);
+            
+            // 设置音频属性
+            this.sounds.launch.volume = 0.3;
+            this.sounds.explosion.volume = 0.4;
+            this.sounds.bgm.volume = 0.2;
+            this.sounds.bgm.loop = true;
+            
+            // 预加载音频
+            await Promise.all([
+                this.sounds.launch.load(),
+                this.sounds.explosion.load(),
+                this.sounds.bgm.load()
+            ]);
+            
+            // 唤醒音频上下文
+            if (this.audioContext.state === 'suspended') {
+                await this.audioContext.resume();
+            }
+            
+            this._initialized = true;
+            console.log('Audio initialized successfully');
         } catch (error) {
             console.error('Error initializing audio:', error);
         }
     }
 
-    playLaunch() {
-        if (!this._initialized) return;
+    async playLaunch() {
+        if (!this._initialized || !this.sounds.launch) return;
         try {
-            const sound = this.launchSound.cloneNode();
+            const sound = this.sounds.launch.cloneNode();
             sound.volume = 0.3;
             sound.currentTime = 0;
-            const playPromise = sound.play();
-            if (playPromise) {
-                playPromise.catch(error => {
-                    console.error('Error playing launch sound:', error);
-                });
-            }
+            await sound.play();
         } catch (error) {
             console.error('Error playing launch sound:', error);
         }
     }
 
-    playExplosion() {
-        if (!this._initialized) return;
+    async playExplosion() {
+        if (!this._initialized || !this.sounds.explosion) return;
         try {
-            const sound = this.explosionSound.cloneNode();
+            const sound = this.sounds.explosion.cloneNode();
             sound.volume = 0.4;
             sound.currentTime = 0;
-            const playPromise = sound.play();
-            if (playPromise) {
-                playPromise.catch(error => {
-                    console.error('Error playing explosion sound:', error);
-                });
-            }
+            await sound.play();
         } catch (error) {
             console.error('Error playing explosion sound:', error);
         }
     }
 
-    startBgMusic() {
-        if (!this._initialized) return;
+    async startBgMusic() {
+        if (!this._initialized || !this.sounds.bgm) return;
         try {
-            // 确保从头开始播放
-            this.bgMusic.currentTime = 0;
-            const playPromise = this.bgMusic.play();
-            if (playPromise) {
-                playPromise.catch(error => {
-                    console.error('Error playing background music:', error);
-                    // 如果自动播放失败，等待用户交互再次尝试
-                    const resumeAudio = () => {
-                        this.bgMusic.play().catch(console.error);
-                        document.removeEventListener('click', resumeAudio);
-                        document.removeEventListener('touchstart', resumeAudio);
-                    };
-                    document.addEventListener('click', resumeAudio);
-                    document.addEventListener('touchstart', resumeAudio);
-                });
-            }
+            this.sounds.bgm.currentTime = 0;
+            await this.sounds.bgm.play();
         } catch (error) {
-            console.error('Error starting background music:', error);
+            console.error('Error playing background music:', error);
         }
     }
 
     stopBgMusic() {
-        if (!this._initialized) return;
+        if (!this._initialized || !this.sounds.bgm) return;
         try {
-            this.bgMusic.pause();
-            this.bgMusic.currentTime = 0;
+            this.sounds.bgm.pause();
+            this.sounds.bgm.currentTime = 0;
         } catch (error) {
             console.error('Error stopping background music:', error);
         }
@@ -325,28 +305,32 @@ const Fireworks = () => {
                 try {
                     soundPool.current = new SoundPool();
                     
-                    // 统一处理用户交互初始化音频
-                    const initOnInteraction = () => {
-                        if (soundPool.current && !soundPool.current.initialized) {
-                            soundPool.current.initialize();
+                    // 处理用户交互
+                    const handleInteraction = async () => {
+                        if (!soundPool.current) return;
+                        
+                        // 初始化音频
+                        if (!soundPool.current.initialized) {
+                            await soundPool.current.initialize();
                         }
-                    };
-
-                    // 处理背景音乐播放
-                    const startBgMusic = () => {
-                        if (soundPool.current && soundPool.current.initialized) {
-                            soundPool.current.startBgMusic();
+                        
+                        // 播放背景音乐
+                        if (soundPool.current.initialized) {
+                            await soundPool.current.startBgMusic();
                         }
+                        
+                        // 移除事件监听器
+                        ['click', 'touchstart'].forEach(event => {
+                            document.removeEventListener(event, handleInteraction);
+                        });
                     };
                     
-                    // 添加多个事件监听
-                    ['touchstart', 'click'].forEach(eventType => {
-                        document.addEventListener(eventType, initOnInteraction, { once: true });
-                        // 背景音乐需要用户交互才能播放
-                        document.addEventListener(eventType, startBgMusic, { once: true });
+                    // 添加事件监听器
+                    ['click', 'touchstart'].forEach(event => {
+                        document.addEventListener(event, handleInteraction);
                     });
                 } catch (error) {
-                    console.error('Error initializing audio:', error);
+                    console.error('Error in initAudio:', error);
                 }
             };
 
