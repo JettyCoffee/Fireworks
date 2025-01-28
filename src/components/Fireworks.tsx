@@ -8,7 +8,11 @@ class SoundPool {
     private launchSound: HTMLAudioElement;
     private explosionSound: HTMLAudioElement;
     private bgMusic: HTMLAudioElement;
-    private initialized: boolean = false;
+    private _initialized: boolean = false;
+
+    get initialized(): boolean {
+        return this._initialized;
+    }
 
     constructor() {
         // 使用导入的资源路径
@@ -19,7 +23,7 @@ class SoundPool {
     }
 
     initialize(): void {
-        if (this.initialized) return;
+        if (this._initialized) return;
         
         try {
             // 设置音量
@@ -31,14 +35,14 @@ class SoundPool {
             // 预加载背景音乐
             this.bgMusic.load();
             
-            this.initialized = true;
+            this._initialized = true;
         } catch (error) {
             console.error('Error initializing audio:', error);
         }
     }
 
     playLaunch(): void {
-        if (!this.initialized) return;
+        if (!this._initialized) return;
         try {
             // 克隆音频对象以实现同时播放
             const sound = this.launchSound.cloneNode() as HTMLAudioElement;
@@ -50,7 +54,7 @@ class SoundPool {
     }
 
     playExplosion(): void {
-        if (!this.initialized) return;
+        if (!this._initialized) return;
         try {
             // 克隆音频对象以实现同时播放
             const sound = this.explosionSound.cloneNode() as HTMLAudioElement;
@@ -62,12 +66,12 @@ class SoundPool {
     }
 
     startBgMusic(): void {
-        if (!this.initialized) return;
+        if (!this._initialized) return;
         this.bgMusic.play().catch(() => {});
     }
 
     stopBgMusic(): void {
-        if (!this.initialized) return;
+        if (!this._initialized) return;
         this.bgMusic.pause();
         this.bgMusic.currentTime = 0;
     }
@@ -275,10 +279,43 @@ const Fireworks: React.FC = () => {
     const [showHint, setShowHint] = React.useState(true);
     const [isFirstInteraction, setIsFirstInteraction] = React.useState(true);
     const [score, setScore] = React.useState(0);
+    const [isPortrait, setIsPortrait] = React.useState(true);
+
+    // 检测设备方向
+    useEffect(() => {
+        const checkOrientation = () => {
+            setIsPortrait(window.innerHeight > window.innerWidth);
+        };
+
+        checkOrientation();
+        window.addEventListener('resize', checkOrientation);
+        window.addEventListener('orientationchange', checkOrientation);
+
+        return () => {
+            window.removeEventListener('resize', checkOrientation);
+            window.removeEventListener('orientationchange', checkOrientation);
+        };
+    }, []);
 
     useEffect(() => {
         try {
-            soundPool.current = new SoundPool();
+            // 初始化音频
+            const initAudio = async () => {
+                try {
+                    soundPool.current = new SoundPool();
+                    // iOS Safari 需要用户交互才能播放音频
+                    document.addEventListener('touchstart', () => {
+                        if (soundPool.current && !soundPool.current.initialized) {
+                            soundPool.current.initialize();
+                        }
+                    }, { once: true });
+                } catch (error) {
+                    console.error('Error initializing audio:', error);
+                }
+            };
+
+            initAudio();
+
             const canvas = canvasRef.current;
             if (!canvas) {
                 console.error('Canvas not found');
@@ -293,9 +330,15 @@ const Fireworks: React.FC = () => {
 
             const setCanvasSize = () => {
                 try {
-                    canvas.width = window.innerWidth;
-                    canvas.height = window.innerHeight;
-                    console.log(`Canvas size set to: ${canvas.width}x${canvas.height}`);
+                    // 使用 devicePixelRatio 确保在高 DPI 设备上清晰显示
+                    const dpr = window.devicePixelRatio || 1;
+                    const rect = canvas.getBoundingClientRect();
+                    canvas.width = rect.width * dpr;
+                    canvas.height = rect.height * dpr;
+                    ctx.scale(dpr, dpr);
+                    canvas.style.width = `${rect.width}px`;
+                    canvas.style.height = `${rect.height}px`;
+                    console.log(`Canvas size set to: ${canvas.width}x${canvas.height}, DPR: ${dpr}`);
                 } catch (error) {
                     console.error('Error setting canvas size:', error);
                 }
@@ -306,7 +349,14 @@ const Fireworks: React.FC = () => {
                     if (isFirstInteraction) {
                         if (soundPool.current) {
                             soundPool.current.initialize();
-                            soundPool.current.startBgMusic();
+                            // iOS Safari 需要用户交互才能播放音频
+                            const playAudio = () => {
+                                if (soundPool.current) {
+                                    soundPool.current.startBgMusic();
+                                }
+                                document.removeEventListener('touchend', playAudio);
+                            };
+                            document.addEventListener('touchend', playAudio);
                         }
                         setIsFirstInteraction(false);
                         setShowHint(false);
@@ -327,7 +377,6 @@ const Fireworks: React.FC = () => {
                             ctx,
                             soundPool.current
                         ));
-                        console.log(`Firework launched from (${startX},${startY}) to (${x},${y})`);
                     }
                 } catch (error) {
                     console.error('Error in handleInteraction:', error);
@@ -398,28 +447,34 @@ const Fireworks: React.FC = () => {
     }, [isFirstInteraction]);
 
     return (
-        <div className="relative w-screen h-screen bg-black overflow-hidden">
+        <div className="fixed inset-0 w-full h-full bg-black overflow-hidden">
             {/* 计分板 */}
-            <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-10">
-                <div className="bg-black bg-opacity-30 px-4 py-2 rounded-full 
-                    flex items-center gap-2 border border-white border-opacity-10">
-                    <span className="text-white text-opacity-80">已放</span>
-                    <span className="text-white text-xl font-bold">{score}</span>
-                    <span className="text-white text-opacity-80">个烟花</span>
+            <div className="fixed top-safe left-1/2 transform -translate-x-1/2 z-10 
+                px-4 py-2 mt-2 md:mt-4">
+                <div className="bg-black/30 backdrop-blur-sm px-4 py-2 rounded-full 
+                    flex items-center gap-2 border border-white/10
+                    shadow-lg">
+                    <span className="text-white/80 text-sm md:text-base">已放</span>
+                    <span className="text-white text-lg md:text-xl font-bold">{score}</span>
+                    <span className="text-white/80 text-sm md:text-base">个烟花</span>
                 </div>
             </div>
 
             <canvas
                 ref={canvasRef}
-                className="block touch-none w-screen h-screen"
+                className="touch-none w-full h-full"
+                style={{
+                    WebkitTapHighlightColor: 'transparent',
+                }}
             />
 
             {/* 提示文本 */}
             {showHint && (
                 <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 
-                    pointer-events-none z-10">
-                    <div className="bg-black bg-opacity-40 px-6 py-3 rounded-lg
-                        text-white text-xl text-center">
+                    pointer-events-none z-10 px-4 w-full max-w-sm">
+                    <div className="bg-black/40 backdrop-blur-sm px-6 py-3 rounded-lg
+                        text-white text-lg md:text-xl text-center
+                        shadow-lg">
                         点击屏幕放烟花
                     </div>
                 </div>
