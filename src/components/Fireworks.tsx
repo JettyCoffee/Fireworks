@@ -1,30 +1,104 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { FireworkType, ParticleType } from '../types/firework';
 
+class SoundPool {
+    private launchSounds: HTMLAudioElement[];
+    private explosionSounds: HTMLAudioElement[];
+    private bgMusic: HTMLAudioElement;
+    private currentLaunch: number;
+    private currentExplosion: number;
+
+    constructor() {
+        this.launchSounds = Array(3).fill(null).map(() => new Audio('https://cdn.pixabay.com/download/audio/2022/03/24/audio_d007e49a6e.mp3?filename=swish-6435.mp3'));
+        this.explosionSounds = Array(3).fill(null).map(() => new Audio('https://cdn.pixabay.com/download/audio/2022/10/23/audio_946b4c601d.mp3?filename=firework-explosion-6288.mp3'));
+        this.bgMusic = new Audio('/sounds/haoyunlai.m4a');
+        this.currentLaunch = 0;
+        this.currentExplosion = 0;
+
+        this.launchSounds.forEach(sound => {
+            sound.load();
+            sound.volume = 0.15;
+        });
+        this.explosionSounds.forEach(sound => {
+            sound.load();
+            sound.volume = 0.2;
+        });
+
+        this.bgMusic.loop = true;
+        this.bgMusic.volume = 0.4;
+        this.bgMusic.load();
+    }
+
+    playLaunch(): void {
+        const sound = this.launchSounds[this.currentLaunch];
+        if (sound.currentTime > 0) {
+            sound.currentTime = 0;
+        }
+        void sound.play();
+        this.currentLaunch = (this.currentLaunch + 1) % this.launchSounds.length;
+    }
+
+    playExplosion(): void {
+        const sound = this.explosionSounds[this.currentExplosion];
+        if (sound.currentTime > 0) {
+            sound.currentTime = 0;
+        }
+        void sound.play();
+        this.currentExplosion = (this.currentExplosion + 1) % this.explosionSounds.length;
+    }
+
+    startBgMusic(): void {
+        void this.bgMusic.play();
+    }
+
+    stopBgMusic(): void {
+        this.bgMusic.pause();
+        this.bgMusic.currentTime = 0;
+    }
+}
+
 class Firework implements FireworkType {
+    public startX: number;
+    public startY: number;
+    public targetX: number;
+    public targetY: number;
+    public distanceToTarget: number;
+    public distanceTraveled: number;
+    public coordinates: number[][];
+    public angle: number;
+    public speed: number;
+    public friction: number;
+    public hue: number;
+    public brightness: number;
+    public alpha: number;
+    public decay: number;
+
     constructor(
         public x: number,
         public y: number,
-        public targetX: number,
-        public targetY: number,
-        public ctx: CanvasRenderingContext2D
+        targetX: number,
+        targetY: number,
+        private ctx: CanvasRenderingContext2D,
+        private soundPool: SoundPool
     ) {
         this.startX = x;
         this.startY = y;
-        this.distanceToTarget = Math.sqrt(Math.pow(targetX - x, 2) + Math.pow(targetY - y, 2));
+        this.targetX = targetX + (Math.random() - 0.5) * 40;
+        this.targetY = targetY + (Math.random() - 0.5) * 40;
+        this.distanceToTarget = Math.sqrt(Math.pow(this.targetX - x, 2) + Math.pow(this.targetY - y, 2));
         this.distanceTraveled = 0;
         this.coordinates = [];
-        this.angle = Math.atan2(targetY - y, targetX - x);
-        this.speed = 2;
-        this.friction = 0.99;
+        this.angle = Math.atan2(this.targetY - y, this.targetX - x);
+        this.speed = Math.random() * 3 + 8;
+        this.friction = 0.98;
         this.hue = Math.random() * 360;
-        this.brightness = Math.random() * 50 + 50;
+        this.brightness = Math.random() * 20 + 80;
         this.alpha = 1;
         this.decay = Math.random() * 0.03 + 0.02;
 
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 6; i++) {
             this.coordinates.push([x, y]);
         }
     }
@@ -41,7 +115,8 @@ class Firework implements FireworkType {
         );
 
         if (this.distanceTraveled >= this.distanceToTarget) {
-            createParticles(this.targetX, this.targetY, this.ctx, particles);
+            createParticles(this.targetX, this.targetY, this.ctx, particles, this.hue);
+            this.soundPool.playExplosion();
             return false;
         }
 
@@ -58,28 +133,43 @@ class Firework implements FireworkType {
         );
         this.ctx.lineTo(this.x, this.y);
         this.ctx.strokeStyle = `hsla(${this.hue}, 100%, ${this.brightness}%, ${this.alpha})`;
-        this.ctx.lineWidth = 2;
+        this.ctx.lineWidth = 3;
         this.ctx.stroke();
+
+        this.ctx.beginPath();
+        this.ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+        this.ctx.fillStyle = `hsla(${this.hue}, 100%, ${this.brightness}%, ${this.alpha})`;
+        this.ctx.fill();
     }
 }
 
 class Particle implements ParticleType {
-    coordinates: number[][];
+    public coordinates: number[][];
+    public angle: number;
+    public speed: number;
+    public friction: number;
+    public gravity: number;
+    public hue: number;
+    public brightness: number;
+    public alpha: number;
+    public decay: number;
     
     constructor(
         public x: number,
         public y: number,
-        public ctx: CanvasRenderingContext2D
+        private ctx: CanvasRenderingContext2D,
+        hue: number,
+        private shape: number = Math.floor(Math.random() * 3)
     ) {
         this.coordinates = [];
         this.angle = Math.random() * Math.PI * 2;
-        this.speed = Math.random() * 10 + 2;
+        this.speed = Math.random() * 15 + 5;
         this.friction = 0.95;
-        this.gravity = 1;
-        this.hue = Math.random() * 360;
-        this.brightness = Math.random() * 50 + 50;
+        this.gravity = 0.3;
+        this.hue = hue + Math.random() * 20 - 10;
+        this.brightness = Math.random() * 20 + 80;
         this.alpha = 1;
-        this.decay = Math.random() * 0.02 + 0.02;
+        this.decay = Math.random() * 0.015 + 0.003;
 
         for (let i = 0; i < 5; i++) {
             this.coordinates.push([x, y]);
@@ -89,40 +179,86 @@ class Particle implements ParticleType {
     update(): boolean {
         this.coordinates.pop();
         this.coordinates.unshift([this.x, this.y]);
+
         this.speed *= this.friction;
         this.x += Math.cos(this.angle) * this.speed;
         this.y += Math.sin(this.angle) * this.speed + this.gravity;
         this.alpha -= this.decay;
 
-        return this.alpha >= 0.1;
+        return this.alpha >= 0.05;
     }
 
     draw(): void {
         this.ctx.beginPath();
-        this.ctx.moveTo(
-            this.coordinates[this.coordinates.length - 1][0],
-            this.coordinates[this.coordinates.length - 1][1]
-        );
-        this.ctx.lineTo(this.x, this.y);
-        this.ctx.strokeStyle = `hsla(${this.hue}, 100%, ${this.brightness}%, ${this.alpha})`;
-        this.ctx.lineWidth = 2;
-        this.ctx.stroke();
+        
+        switch(this.shape) {
+            case 0:
+                this.drawStar();
+                break;
+            case 1:
+                this.drawCircle();
+                break;
+            case 2:
+                this.drawSparkle();
+                break;
+        }
+
+        this.ctx.shadowBlur = 15;
+        this.ctx.shadowColor = `hsla(${this.hue}, 100%, ${this.brightness}%, ${this.alpha})`;
+        this.ctx.fillStyle = `hsla(${this.hue}, 100%, ${this.brightness}%, ${this.alpha})`;
+        this.ctx.fill();
+        this.ctx.shadowBlur = 0;
+    }
+
+    private drawStar(): void {
+        const size = 2;
+        for (let i = 0; i < 5; i++) {
+            const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
+            const x = this.x + Math.cos(angle) * size;
+            const y = this.y + Math.sin(angle) * size;
+            if (i === 0) {
+                this.ctx.moveTo(x, y);
+            } else {
+                this.ctx.lineTo(x, y);
+            }
+        }
+        this.ctx.closePath();
+    }
+
+    private drawCircle(): void {
+        this.ctx.arc(this.x, this.y, 1.5, 0, Math.PI * 2);
+    }
+
+    private drawSparkle(): void {
+        const size = 2;
+        for (let i = 0; i < 4; i++) {
+            const angle = (Math.PI / 2) * i;
+            this.ctx.moveTo(this.x, this.y);
+            this.ctx.lineTo(
+                this.x + Math.cos(angle) * size,
+                this.y + Math.sin(angle) * size
+            );
+        }
     }
 }
 
-function createParticles(x: number, y: number, ctx: CanvasRenderingContext2D, particles: Particle[]) {
-    for (let i = 0; i < 30; i++) {
-        particles.push(new Particle(x, y, ctx));
+function createParticles(x: number, y: number, ctx: CanvasRenderingContext2D, particles: Particle[], hue: number) {
+    const particleCount = Math.floor(Math.random() * 50) + 100;
+    for (let i = 0; i < particleCount; i++) {
+        particles.push(new Particle(x, y, ctx, hue));
     }
 }
 
-export default function Fireworks() {
+const Fireworks: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const fireworks = useRef<Firework[]>([]);
     const particles = useRef<Particle[]>([]);
-    const animationFrameId = useRef<number>();
+    const animationFrameId = useRef<number | null>(null);
+    const soundPool = useRef<SoundPool | null>(null);
+    const musicStarted = useRef<boolean>(false);
 
     useEffect(() => {
+        soundPool.current = new SoundPool();
         const canvas = canvasRef.current;
         if (!canvas) return;
 
@@ -135,7 +271,7 @@ export default function Fireworks() {
         };
 
         const loop = () => {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             let i = fireworks.current.length;
@@ -160,9 +296,25 @@ export default function Fireworks() {
         };
 
         const handleClick = (e: MouseEvent) => {
+            if (!musicStarted.current && soundPool.current) {
+                soundPool.current.startBgMusic();
+                musicStarted.current = true;
+            }
+
             const startX = canvas.width / 2;
             const startY = canvas.height;
-            fireworks.current.push(new Firework(startX, startY, e.clientX, e.clientY, ctx));
+            
+            if (soundPool.current) {
+                soundPool.current.playLaunch();
+                fireworks.current.push(new Firework(
+                    startX,
+                    startY,
+                    e.clientX,
+                    e.clientY,
+                    ctx,
+                    soundPool.current
+                ));
+            }
         };
 
         setCanvasSize();
@@ -175,6 +327,9 @@ export default function Fireworks() {
             canvas.removeEventListener('click', handleClick);
             if (animationFrameId.current) {
                 cancelAnimationFrame(animationFrameId.current);
+            }
+            if (soundPool.current) {
+                soundPool.current.stopBgMusic();
             }
         };
     }, []);
@@ -190,4 +345,6 @@ export default function Fireworks() {
             </div>
         </div>
     );
-} 
+};
+
+export default Fireworks; 
