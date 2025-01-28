@@ -24,10 +24,32 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // 禁用一些可能导致问题的优化
-  swcMinify: true,
+  // 网络配置
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'X-Requested-With, Content-Type, Authorization',
+          },
+        ],
+      },
+    ];
+  },
+  // 移动端优化
   poweredByHeader: false,
   reactStrictMode: true,
+  compress: true,
 }
 
 module.exports = nextConfig; 
