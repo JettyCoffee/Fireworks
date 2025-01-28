@@ -18,14 +18,16 @@ const nextConfig = {
   },
   // 优化构建设置
   experimental: {
-    optimizeCss: true,
     optimizePackageImports: ['react', 'react-dom'],
   },
   // 静态资源优化
   images: {
-    domains: ['localhost'],
     unoptimized: true,
   },
+  // 禁用一些可能导致问题的优化
+  swcMinify: true,
+  poweredByHeader: false,
+  reactStrictMode: true,
 }
 
 module.exports = nextConfig; 
