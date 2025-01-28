@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { FireworkType, ParticleType } from '../types/firework';
 
 // 创建音效类
@@ -32,34 +32,33 @@ class SoundPool {
 
         // 设置背景音乐
         this.bgMusic.loop = true;
-        this.bgMusic.volume = 0.4; // 稍微调大背景音乐音量
+        this.bgMusic.volume = 0.4;
         this.bgMusic.load();
     }
 
-    playLaunch() {
+    playLaunch(): void {
         const sound = this.launchSounds[this.currentLaunch];
         if (sound.currentTime > 0) {
             sound.currentTime = 0;
         }
-        sound.play().catch(() => {});
+        void sound.play();
         this.currentLaunch = (this.currentLaunch + 1) % this.launchSounds.length;
     }
 
-    playExplosion() {
+    playExplosion(): void {
         const sound = this.explosionSounds[this.currentExplosion];
         if (sound.currentTime > 0) {
             sound.currentTime = 0;
         }
-        sound.play().catch(() => {});
+        void sound.play();
         this.currentExplosion = (this.currentExplosion + 1) % this.explosionSounds.length;
     }
 
-    startBgMusic() {
-        // 用户交互后开始播放背景音乐
-        this.bgMusic.play().catch(() => {});
+    startBgMusic(): void {
+        void this.bgMusic.play();
     }
 
-    stopBgMusic() {
+    stopBgMusic(): void {
         this.bgMusic.pause();
         this.bgMusic.currentTime = 0;
     }
@@ -234,7 +233,11 @@ class Particle implements ParticleType {
             const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
             const x = this.x + Math.cos(angle) * size;
             const y = this.y + Math.sin(angle) * size;
-            i === 0 ? this.ctx.moveTo(x, y) : this.ctx.lineTo(x, y);
+            if (i === 0) {
+                this.ctx.moveTo(x, y);
+            } else {
+                this.ctx.lineTo(x, y);
+            }
         }
         this.ctx.closePath();
     }
@@ -264,7 +267,7 @@ function createParticles(x: number, y: number, ctx: CanvasRenderingContext2D, pa
     }
 }
 
-export default function Fireworks() {
+const Fireworks: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const fireworks = useRef<Firework[]>([]);
     const particles = useRef<Particle[]>([]);
@@ -311,7 +314,6 @@ export default function Fireworks() {
         };
 
         const handleClick = (e: MouseEvent) => {
-            // 第一次点击时开始播放背景音乐
             if (!musicStarted.current && soundPool.current) {
                 soundPool.current.startBgMusic();
                 musicStarted.current = true;
@@ -320,18 +322,17 @@ export default function Fireworks() {
             const startX = canvas.width / 2;
             const startY = canvas.height;
             
-            // 只发射一个烟花
             if (soundPool.current) {
                 soundPool.current.playLaunch();
+                fireworks.current.push(new Firework(
+                    startX,
+                    startY,
+                    e.clientX,
+                    e.clientY,
+                    ctx,
+                    soundPool.current
+                ));
             }
-            fireworks.current.push(new Firework(
-                startX,
-                startY,
-                e.clientX,
-                e.clientY,
-                ctx,
-                soundPool.current!
-            ));
         };
 
         setCanvasSize();
@@ -345,7 +346,6 @@ export default function Fireworks() {
             if (animationFrameId.current) {
                 cancelAnimationFrame(animationFrameId.current);
             }
-            // 清理音频
             if (soundPool.current) {
                 soundPool.current.stopBgMusic();
             }
@@ -363,4 +363,6 @@ export default function Fireworks() {
             </div>
         </div>
     );
-} 
+};
+
+export default Fireworks; 
