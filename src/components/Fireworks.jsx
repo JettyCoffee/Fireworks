@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import bgMusic from '../../public/sounds/haoyunlai.m4a';
-import launchSound from '../../public/sounds/launch.mp3';
-import explosionSound from '../../public/sounds/explosion.mp3';
+
+// 使用相对路径导入音频文件
+const bgMusic = '/sounds/haoyunlai.m4a';
+const launchSound = '/sounds/launch.mp3';
+const explosionSound = '/sounds/explosion.mp3';
 
 class SoundPool {
     constructor() {
@@ -28,10 +30,15 @@ class SoundPool {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             this.audioContext = new AudioContext();
             
-            // 创建音频元素
-            this.sounds.launch = new Audio(launchSound);
-            this.sounds.explosion = new Audio(explosionSound);
-            this.sounds.bgm = new Audio(bgMusic);
+            // 创建音频元素并设置类型
+            this.sounds.launch = new Audio();
+            this.sounds.launch.src = launchSound;
+
+            this.sounds.explosion = new Audio();
+            this.sounds.explosion.src = explosionSound;
+
+            this.sounds.bgm = new Audio();
+            this.sounds.bgm.src = bgMusic;
             
             // 设置音频属性
             this.sounds.launch.volume = 0.3;
@@ -40,11 +47,43 @@ class SoundPool {
             this.sounds.bgm.loop = true;
             
             // 预加载音频
-            await Promise.all([
-                this.sounds.launch.load(),
-                this.sounds.explosion.load(),
-                this.sounds.bgm.load()
-            ]);
+            const loadAudio = async (audio, name) => {
+                try {
+                    await new Promise((resolve, reject) => {
+                        const handleLoad = () => {
+                            audio.removeEventListener('error', handleError);
+                            resolve();
+                        };
+                        
+                        const handleError = (e) => {
+                            audio.removeEventListener('canplaythrough', handleLoad);
+                            console.error(`Error loading ${name}:`, e);
+                            reject(new Error(`Failed to load ${name}`));
+                        };
+                        
+                        audio.addEventListener('canplaythrough', handleLoad, { once: true });
+                        audio.addEventListener('error', handleError, { once: true });
+                        
+                        // 设置加载超时
+                        setTimeout(() => {
+                            audio.removeEventListener('canplaythrough', handleLoad);
+                            audio.removeEventListener('error', handleError);
+                            reject(new Error(`Timeout loading ${name}`));
+                        }, 5000);
+                        
+                        audio.load();
+                    });
+                    console.log(`${name} loaded successfully`);
+                } catch (error) {
+                    console.error(`Error loading ${name}:`, error);
+                    throw error;
+                }
+            };
+
+            // 按顺序加载音频文件
+            await loadAudio(this.sounds.launch, 'launch sound');
+            await loadAudio(this.sounds.explosion, 'explosion sound');
+            await loadAudio(this.sounds.bgm, 'background music');
             
             // 唤醒音频上下文
             if (this.audioContext.state === 'suspended') {
@@ -55,6 +94,7 @@ class SoundPool {
             console.log('Audio initialized successfully');
         } catch (error) {
             console.error('Error initializing audio:', error);
+            throw error;
         }
     }
 
@@ -64,7 +104,10 @@ class SoundPool {
             const sound = this.sounds.launch.cloneNode();
             sound.volume = 0.3;
             sound.currentTime = 0;
-            await sound.play();
+            await sound.play().catch(error => {
+                console.error('Launch sound play error:', error);
+                throw error;
+            });
         } catch (error) {
             console.error('Error playing launch sound:', error);
         }
@@ -76,7 +119,10 @@ class SoundPool {
             const sound = this.sounds.explosion.cloneNode();
             sound.volume = 0.4;
             sound.currentTime = 0;
-            await sound.play();
+            await sound.play().catch(error => {
+                console.error('Explosion sound play error:', error);
+                throw error;
+            });
         } catch (error) {
             console.error('Error playing explosion sound:', error);
         }
@@ -85,10 +131,35 @@ class SoundPool {
     async startBgMusic() {
         if (!this._initialized || !this.sounds.bgm) return;
         try {
-            this.sounds.bgm.currentTime = 0;
-            await this.sounds.bgm.play();
+            const bgm = this.sounds.bgm;
+            bgm.currentTime = 0;
+            
+            // 尝试播放背景音乐
+            try {
+                await bgm.play();
+                console.log('Background music started successfully');
+            } catch (error) {
+                console.error('Initial background music play failed:', error);
+                
+                // 如果自动播放失败，等待用户交互
+                const resumeAudio = async () => {
+                    try {
+                        await bgm.play();
+                        console.log('Background music resumed successfully');
+                        ['click', 'touchstart'].forEach(event => {
+                            document.removeEventListener(event, resumeAudio);
+                        });
+                    } catch (error) {
+                        console.error('Resume background music failed:', error);
+                    }
+                };
+
+                ['click', 'touchstart'].forEach(event => {
+                    document.addEventListener(event, resumeAudio, { once: true });
+                });
+            }
         } catch (error) {
-            console.error('Error playing background music:', error);
+            console.error('Error in startBgMusic:', error);
         }
     }
 
