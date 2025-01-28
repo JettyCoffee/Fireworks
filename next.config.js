@@ -8,7 +8,7 @@ const nextConfig = {
       use: {
         loader: 'file-loader',
         options: {
-          publicPath: './',  // 修改为相对路径
+          publicPath: '/',
           outputPath: 'static/media/',
           name: '[name].[hash].[ext]',
         },
@@ -26,9 +26,9 @@ const nextConfig = {
   },
   // 禁用不必要的功能
   poweredByHeader: false,
-  // 移除 headers 配置，因为在静态导出时不起作用
-  basePath: '',  // 添加基础路径配置
-  assetPrefix: './',  // 添加资源前缀配置
+  // 资源路径配置
+  basePath: '',
+  assetPrefix: '/',
 }
 
 module.exports = nextConfig; 
