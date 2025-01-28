@@ -274,101 +274,124 @@ const Fireworks: React.FC = () => {
     const [score, setScore] = React.useState(0);
 
     useEffect(() => {
-        soundPool.current = new SoundPool();
-        const canvas = canvasRef.current;
-        if (!canvas) return;
+        try {
+            soundPool.current = new SoundPool();
+            const canvas = canvasRef.current;
+            if (!canvas) {
+                console.error('Canvas not found');
+                return;
+            }
 
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                console.error('Could not get canvas context');
+                return;
+            }
 
-        const setCanvasSize = () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        };
+            const setCanvasSize = () => {
+                try {
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                    console.log(`Canvas size set to: ${canvas.width}x${canvas.height}`);
+                } catch (error) {
+                    console.error('Error setting canvas size:', error);
+                }
+            };
 
-        const handleInteraction = (x: number, y: number) => {
-            if (isFirstInteraction) {
+            const handleInteraction = (x: number, y: number) => {
+                try {
+                    if (isFirstInteraction) {
+                        if (soundPool.current) {
+                            soundPool.current.initialize();
+                            soundPool.current.startBgMusic();
+                        }
+                        setIsFirstInteraction(false);
+                        setShowHint(false);
+                    }
+
+                    setScore(prev => prev + 1);
+
+                    const startX = window.innerWidth / 2;
+                    const startY = window.innerHeight;
+                    
+                    if (soundPool.current && ctx) {
+                        soundPool.current.playLaunch();
+                        fireworks.current.push(new Firework(
+                            startX,
+                            startY,
+                            x,
+                            y,
+                            ctx,
+                            soundPool.current
+                        ));
+                        console.log(`Firework launched from (${startX},${startY}) to (${x},${y})`);
+                    }
+                } catch (error) {
+                    console.error('Error in handleInteraction:', error);
+                }
+            };
+
+            const handleClick = (e: MouseEvent) => {
+                handleInteraction(e.clientX, e.clientY);
+            };
+
+            const handleTouch = (e: TouchEvent) => {
+                e.preventDefault(); // 防止滚动和缩放
+                const touch = e.touches[0];
+                handleInteraction(touch.clientX, touch.clientY);
+            };
+
+            setCanvasSize();
+            window.addEventListener('resize', setCanvasSize);
+            canvas.addEventListener('click', handleClick);
+            canvas.addEventListener('touchstart', handleTouch);
+
+            // 动画循环
+            const loop = () => {
+                try {
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    let i = fireworks.current.length;
+                    while (i--) {
+                        if (!fireworks.current[i].update(particles.current)) {
+                            fireworks.current.splice(i, 1);
+                        } else {
+                            fireworks.current[i].draw();
+                        }
+                    }
+
+                    i = particles.current.length;
+                    while (i--) {
+                        if (!particles.current[i].update()) {
+                            particles.current.splice(i, 1);
+                        } else {
+                            particles.current[i].draw();
+                        }
+                    }
+
+                    animationFrameId.current = requestAnimationFrame(loop);
+                } catch (error) {
+                    console.error('Error in animation loop:', error);
+                }
+            };
+
+            loop();
+
+            return () => {
+                window.removeEventListener('resize', setCanvasSize);
+                canvas.removeEventListener('click', handleClick);
+                canvas.removeEventListener('touchstart', handleTouch);
+                if (animationFrameId.current) {
+                    cancelAnimationFrame(animationFrameId.current);
+                }
                 if (soundPool.current) {
-                    soundPool.current.initialize();
-                    soundPool.current.startBgMusic();
+                    soundPool.current.stopBgMusic();
                 }
-                setIsFirstInteraction(false);
-                setShowHint(false);
-            }
-
-            setScore(prev => prev + 1);
-
-            // 在移动端，从底部发射烟花
-            const startX = window.innerWidth / 2;
-            const startY = window.innerHeight;
-            
-            if (soundPool.current) {
-                soundPool.current.playLaunch();
-                fireworks.current.push(new Firework(
-                    startX,
-                    startY,
-                    x,
-                    y,
-                    ctx,
-                    soundPool.current
-                ));
-            }
-        };
-
-        const handleClick = (e: MouseEvent) => {
-            handleInteraction(e.clientX, e.clientY);
-        };
-
-        const handleTouch = (e: TouchEvent) => {
-            e.preventDefault(); // 防止滚动和缩放
-            const touch = e.touches[0];
-            handleInteraction(touch.clientX, touch.clientY);
-        };
-
-        setCanvasSize();
-        window.addEventListener('resize', setCanvasSize);
-        canvas.addEventListener('click', handleClick);
-        canvas.addEventListener('touchstart', handleTouch);
-
-        // 动画循环
-        const loop = () => {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            let i = fireworks.current.length;
-            while (i--) {
-                if (!fireworks.current[i].update(particles.current)) {
-                    fireworks.current.splice(i, 1);
-                } else {
-                    fireworks.current[i].draw();
-                }
-            }
-
-            i = particles.current.length;
-            while (i--) {
-                if (!particles.current[i].update()) {
-                    particles.current.splice(i, 1);
-                } else {
-                    particles.current[i].draw();
-                }
-            }
-
-            animationFrameId.current = requestAnimationFrame(loop);
-        };
-
-        loop();
-
-        return () => {
-            window.removeEventListener('resize', setCanvasSize);
-            canvas.removeEventListener('click', handleClick);
-            canvas.removeEventListener('touchstart', handleTouch);
-            if (animationFrameId.current) {
-                cancelAnimationFrame(animationFrameId.current);
-            }
-            if (soundPool.current) {
-                soundPool.current.stopBgMusic();
-            }
-        };
+            };
+        } catch (error) {
+            console.error('Error in useEffect:', error);
+        }
     }, [isFirstInteraction]);
 
     return (
@@ -385,7 +408,7 @@ const Fireworks: React.FC = () => {
 
             <canvas
                 ref={canvasRef}
-                className="block touch-none"
+                className="block touch-none w-screen h-screen"
             />
 
             {/* 提示文本 */}
