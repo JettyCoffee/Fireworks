@@ -8,7 +8,7 @@ const nextConfig = {
       use: {
         loader: 'file-loader',
         options: {
-          publicPath: '/',
+          publicPath: './',  // 修改为相对路径
           outputPath: 'static/media/',
           name: '[name].[hash].[ext]',
         },
@@ -26,28 +26,9 @@ const nextConfig = {
   },
   // 禁用不必要的功能
   poweredByHeader: false,
-  // 网络配置
-  async headers() {
-    return [
-      {
-        source: '/:path*',
-        headers: [
-          {
-            key: 'Access-Control-Allow-Origin',
-            value: '*',
-          },
-          {
-            key: 'Access-Control-Allow-Methods',
-            value: 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
-          },
-          {
-            key: 'Access-Control-Allow-Headers',
-            value: 'X-Requested-With, Content-Type, Authorization',
-          },
-        ],
-      },
-    ];
-  },
+  // 移除 headers 配置，因为在静态导出时不起作用
+  basePath: '',  // 添加基础路径配置
+  assetPrefix: './',  // 添加资源前缀配置
 }
 
 module.exports = nextConfig; 

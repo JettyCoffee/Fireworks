@@ -308,12 +308,18 @@ const Fireworks: React.FC = () => {
             const initAudio = async () => {
                 try {
                     soundPool.current = new SoundPool();
-                    // iOS Safari 需要用户交互才能播放音频
-                    document.addEventListener('touchstart', () => {
+                    // 统一处理用户交互初始化音频
+                    const initOnInteraction = () => {
                         if (soundPool.current && !soundPool.current.initialized) {
                             soundPool.current.initialize();
+                            soundPool.current.startBgMusic();
                         }
-                    }, { once: true });
+                    };
+                    
+                    // 添加多个事件监听
+                    ['touchstart', 'click', 'touchend'].forEach(eventType => {
+                        document.addEventListener(eventType, initOnInteraction, { once: true });
+                    });
                 } catch (error) {
                     console.error('Error initializing audio:', error);
                 }
@@ -327,7 +333,10 @@ const Fireworks: React.FC = () => {
                 return;
             }
 
-            const ctx = canvas.getContext('2d');
+            const ctx = canvas.getContext('2d', {
+                alpha: false,  // 禁用 alpha 通道以提高性能
+                willReadFrequently: false  // 提示不会频繁读取像素
+            });
             if (!ctx) {
                 console.error('Could not get canvas context');
                 return;
@@ -335,14 +344,21 @@ const Fireworks: React.FC = () => {
 
             const setCanvasSize = () => {
                 try {
-                    // 使用 devicePixelRatio 确保在高 DPI 设备上清晰显示
                     const dpr = window.devicePixelRatio || 1;
-                    const rect = canvas.getBoundingClientRect();
-                    canvas.width = rect.width * dpr;
-                    canvas.height = rect.height * dpr;
+                    const displayWidth = window.innerWidth;
+                    const displayHeight = window.innerHeight;
+                    
+                    // 设置画布大小
+                    canvas.width = displayWidth * dpr;
+                    canvas.height = displayHeight * dpr;
+                    
+                    // 设置显示大小
+                    canvas.style.width = `${displayWidth}px`;
+                    canvas.style.height = `${displayHeight}px`;
+                    
+                    // 调整上下文缩放
                     ctx.scale(dpr, dpr);
-                    canvas.style.width = `${rect.width}px`;
-                    canvas.style.height = `${rect.height}px`;
+                    
                     console.log(`Canvas size set to: ${canvas.width}x${canvas.height}, DPR: ${dpr}`);
                 } catch (error) {
                     console.error('Error setting canvas size:', error);
@@ -352,17 +368,6 @@ const Fireworks: React.FC = () => {
             const handleInteraction = (x: number, y: number) => {
                 try {
                     if (isFirstInteraction) {
-                        if (soundPool.current) {
-                            soundPool.current.initialize();
-                            // iOS Safari 需要用户交互才能播放音频
-                            const playAudio = () => {
-                                if (soundPool.current) {
-                                    soundPool.current.startBgMusic();
-                                }
-                                document.removeEventListener('touchend', playAudio);
-                            };
-                            document.addEventListener('touchend', playAudio);
-                        }
                         setIsFirstInteraction(false);
                         setShowHint(false);
                     }
@@ -389,19 +394,22 @@ const Fireworks: React.FC = () => {
             };
 
             const handleClick = (e: MouseEvent) => {
+                e.preventDefault();
                 handleInteraction(e.clientX, e.clientY);
             };
 
             const handleTouch = (e: TouchEvent) => {
-                e.preventDefault(); // 防止滚动和缩放
+                e.preventDefault();
                 const touch = e.touches[0];
-                handleInteraction(touch.clientX, touch.clientY);
+                if (touch) {
+                    handleInteraction(touch.clientX, touch.clientY);
+                }
             };
 
             setCanvasSize();
             window.addEventListener('resize', setCanvasSize);
-            canvas.addEventListener('click', handleClick);
-            canvas.addEventListener('touchstart', handleTouch);
+            canvas.addEventListener('click', handleClick, { passive: false });
+            canvas.addEventListener('touchstart', handleTouch, { passive: false });
 
             // 动画循环
             const loop = () => {
