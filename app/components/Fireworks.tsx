@@ -171,16 +171,15 @@ class Particle implements ParticleType {
         public shape: number = Math.floor(Math.random() * 3)
     ) {
         this.coordinates = [];
-        // 创建更复杂的爆炸模式
-        const angle = (Math.PI * 2 / 30) * Math.floor(Math.random() * 30);
-        this.angle = angle + (Math.random() - 0.5) * 0.5;
-        this.speed = Math.cos(angle * 4) * (Math.random() * 10 + 15);
+        // 修改爆炸模式，使其更加发散
+        this.angle = Math.random() * Math.PI * 2;
+        this.speed = Math.random() * 15 + 5; // 增加初始速度
         this.friction = 0.95;
-        this.gravity = 0.8;
+        this.gravity = 0.3; // 减小重力影响
         this.hue = hue + Math.random() * 20 - 10;
         this.brightness = Math.random() * 20 + 80;
         this.alpha = 1;
-        this.decay = Math.random() * 0.01 + 0.02;
+        this.decay = Math.random() * 0.015 + 0.003; // 减慢衰减速度
 
         // 增加尾迹长度
         for (let i = 0; i < 5; i++) {
@@ -192,12 +191,17 @@ class Particle implements ParticleType {
         this.coordinates.pop();
         this.coordinates.unshift([this.x, this.y]);
 
+        // 减缓速度衰减
         this.speed *= this.friction;
+        
+        // 更新位置
         this.x += Math.cos(this.angle) * this.speed;
         this.y += Math.sin(this.angle) * this.speed + this.gravity;
+        
+        // 减缓透明度衰减
         this.alpha -= this.decay;
 
-        return this.alpha >= 0.1;
+        return this.alpha >= 0.05; // 延长粒子生命周期
     }
 
     draw(): void {
@@ -216,8 +220,8 @@ class Particle implements ParticleType {
                 break;
         }
 
-        // 添加发光效果
-        this.ctx.shadowBlur = 10;
+        // 增强发光效果
+        this.ctx.shadowBlur = 15;
         this.ctx.shadowColor = `hsla(${this.hue}, 100%, ${this.brightness}%, ${this.alpha})`;
         this.ctx.fillStyle = `hsla(${this.hue}, 100%, ${this.brightness}%, ${this.alpha})`;
         this.ctx.fill();
@@ -225,7 +229,7 @@ class Particle implements ParticleType {
     }
 
     private drawStar(): void {
-        const size = 3;
+        const size = 2;
         for (let i = 0; i < 5; i++) {
             const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
             const x = this.x + Math.cos(angle) * size;
@@ -236,7 +240,7 @@ class Particle implements ParticleType {
     }
 
     private drawCircle(): void {
-        this.ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+        this.ctx.arc(this.x, this.y, 1.5, 0, Math.PI * 2);
     }
 
     private drawSparkle(): void {
@@ -253,8 +257,8 @@ class Particle implements ParticleType {
 }
 
 function createParticles(x: number, y: number, ctx: CanvasRenderingContext2D, particles: Particle[], hue: number) {
-    // 创建更多的粒子
-    const particleCount = Math.floor(Math.random() * 30) + 70;
+    // 增加粒子数量
+    const particleCount = Math.floor(Math.random() * 50) + 100;
     for (let i = 0; i < particleCount; i++) {
         particles.push(new Particle(x, y, ctx, hue));
     }
