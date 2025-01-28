@@ -4,58 +4,59 @@ import React, { useEffect, useRef } from 'react';
 import { FireworkType, ParticleType } from '../types/firework';
 
 class SoundPool {
-    private launchSounds: HTMLAudioElement[];
-    private explosionSounds: HTMLAudioElement[];
+    private launchSound: HTMLAudioElement;
+    private explosionSound: HTMLAudioElement;
     private bgMusic: HTMLAudioElement;
-    private currentLaunch: number;
-    private currentExplosion: number;
     private initialized: boolean = false;
 
     constructor() {
-        this.launchSounds = Array(3).fill(null).map(() => new Audio('https://cdn.pixabay.com/download/audio/2022/03/24/audio_d007e49a6e.mp3?filename=swish-6435.mp3'));
-        this.explosionSounds = Array(3).fill(null).map(() => new Audio('https://cdn.pixabay.com/download/audio/2022/10/23/audio_946b4c601d.mp3?filename=firework-explosion-6288.mp3'));
+        // 使用单个音频实例
+        this.launchSound = new Audio('/sounds/haoyunlai.m4a');
+        this.explosionSound = new Audio('/sounds/haoyunlai.m4a');
         this.bgMusic = new Audio('/sounds/haoyunlai.m4a');
-        this.currentLaunch = 0;
-        this.currentExplosion = 0;
     }
 
     initialize(): void {
         if (this.initialized) return;
         
-        this.launchSounds.forEach(sound => {
-            sound.load();
-            sound.volume = 0.15;
-        });
-        this.explosionSounds.forEach(sound => {
-            sound.load();
-            sound.volume = 0.2;
-        });
+        try {
+            // 设置音量
+            this.launchSound.volume = 0.15;
+            this.explosionSound.volume = 0.2;
+            this.bgMusic.volume = 0.4;
+            this.bgMusic.loop = true;
 
-        this.bgMusic.loop = true;
-        this.bgMusic.volume = 0.4;
-        this.bgMusic.load();
-        
-        this.initialized = true;
+            // 预加载背景音乐
+            this.bgMusic.load();
+            
+            this.initialized = true;
+        } catch (error) {
+            console.error('Error initializing audio:', error);
+        }
     }
 
     playLaunch(): void {
         if (!this.initialized) return;
-        const sound = this.launchSounds[this.currentLaunch];
-        if (sound.currentTime > 0) {
-            sound.currentTime = 0;
+        try {
+            // 克隆音频对象以实现同时播放
+            const sound = this.launchSound.cloneNode() as HTMLAudioElement;
+            sound.volume = 0.15;
+            sound.play().catch(() => {});
+        } catch (error) {
+            console.error('Error playing launch sound:', error);
         }
-        sound.play().catch(() => {});
-        this.currentLaunch = (this.currentLaunch + 1) % this.launchSounds.length;
     }
 
     playExplosion(): void {
         if (!this.initialized) return;
-        const sound = this.explosionSounds[this.currentExplosion];
-        if (sound.currentTime > 0) {
-            sound.currentTime = 0;
+        try {
+            // 克隆音频对象以实现同时播放
+            const sound = this.explosionSound.cloneNode() as HTMLAudioElement;
+            sound.volume = 0.2;
+            sound.play().catch(() => {});
+        } catch (error) {
+            console.error('Error playing explosion sound:', error);
         }
-        sound.play().catch(() => {});
-        this.currentExplosion = (this.currentExplosion + 1) % this.explosionSounds.length;
     }
 
     startBgMusic(): void {
