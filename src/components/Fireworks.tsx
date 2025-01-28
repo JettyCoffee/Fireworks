@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { FireworkType, ParticleType } from '../types/firework';
 import bgMusic from '../../public/sounds/haoyunlai.m4a';
 
@@ -279,23 +279,28 @@ const Fireworks: React.FC = () => {
     const [showHint, setShowHint] = React.useState(true);
     const [isFirstInteraction, setIsFirstInteraction] = React.useState(true);
     const [score, setScore] = React.useState(0);
-    const [isPortrait, setIsPortrait] = React.useState(true);
+    const [canvasSize, setCanvasSize] = useState({
+        width: typeof window !== 'undefined' ? window.innerWidth : 0,
+        height: typeof window !== 'undefined' ? window.innerHeight : 0,
+    });
 
-    // 检测设备方向
     useEffect(() => {
-        const checkOrientation = () => {
-            setIsPortrait(window.innerHeight > window.innerWidth);
+        const handleResize = () => {
+            setCanvasSize({
+                width: window.innerWidth,
+                height: window.innerHeight,
+            });
         };
-
-        checkOrientation();
-        window.addEventListener('resize', checkOrientation);
-        window.addEventListener('orientationchange', checkOrientation);
-
-        return () => {
-            window.removeEventListener('resize', checkOrientation);
-            window.removeEventListener('orientationchange', checkOrientation);
-        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    useEffect(() => {
+        if (canvasRef.current) {
+            canvasRef.current.width = canvasSize.width;
+            canvasRef.current.height = canvasSize.height;
+        }
+    }, [canvasSize]);
 
     useEffect(() => {
         try {

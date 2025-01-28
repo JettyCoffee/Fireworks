@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
+  output: 'export',  // 改为静态导出
   // 确保音频文件被正确处理
   webpack: (config) => {
     config.module.rules.push({
@@ -8,7 +8,7 @@ const nextConfig = {
       use: {
         loader: 'file-loader',
         options: {
-          publicPath: '/_next/static/media/',
+          publicPath: '/',
           outputPath: 'static/media/',
           name: '[name].[hash].[ext]',
         },
@@ -16,14 +16,16 @@ const nextConfig = {
     });
     return config;
   },
-  // 优化构建设置
-  experimental: {
-    optimizePackageImports: ['react', 'react-dom'],
-  },
+  // 基本优化
+  reactStrictMode: true,
+  compress: true,
+  trailingSlash: true,
   // 静态资源优化
   images: {
     unoptimized: true,
   },
+  // 禁用不必要的功能
+  poweredByHeader: false,
   // 网络配置
   async headers() {
     return [
@@ -46,10 +48,6 @@ const nextConfig = {
       },
     ];
   },
-  // 移动端优化
-  poweredByHeader: false,
-  reactStrictMode: true,
-  compress: true,
 }
 
 module.exports = nextConfig; 
