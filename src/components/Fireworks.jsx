@@ -1,28 +1,23 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { FireworkType, ParticleType } from '../types/firework';
 import bgMusic from '../../public/sounds/haoyunlai.m4a';
 
 class SoundPool {
-    private launchSound: HTMLAudioElement;
-    private explosionSound: HTMLAudioElement;
-    private bgMusic: HTMLAudioElement;
-    private _initialized: boolean = false;
-
-    get initialized(): boolean {
-        return this._initialized;
-    }
-
     constructor() {
         // 使用导入的资源路径
-        const audioPath = bgMusic as unknown as string;
+        const audioPath = bgMusic;
         this.launchSound = new Audio(audioPath);
         this.explosionSound = new Audio(audioPath);
         this.bgMusic = new Audio(audioPath);
+        this._initialized = false;
     }
 
-    initialize(): void {
+    get initialized() {
+        return this._initialized;
+    }
+
+    initialize() {
         if (this._initialized) return;
         
         try {
@@ -41,11 +36,11 @@ class SoundPool {
         }
     }
 
-    playLaunch(): void {
+    playLaunch() {
         if (!this._initialized) return;
         try {
             // 克隆音频对象以实现同时播放
-            const sound = this.launchSound.cloneNode() as HTMLAudioElement;
+            const sound = this.launchSound.cloneNode();
             sound.volume = 0.15;
             sound.play().catch(() => {});
         } catch (error) {
@@ -53,11 +48,11 @@ class SoundPool {
         }
     }
 
-    playExplosion(): void {
+    playExplosion() {
         if (!this._initialized) return;
         try {
             // 克隆音频对象以实现同时播放
-            const sound = this.explosionSound.cloneNode() as HTMLAudioElement;
+            const sound = this.explosionSound.cloneNode();
             sound.volume = 0.2;
             sound.play().catch(() => {});
         } catch (error) {
@@ -65,51 +60,31 @@ class SoundPool {
         }
     }
 
-    startBgMusic(): void {
+    startBgMusic() {
         if (!this._initialized) return;
         this.bgMusic.play().catch(() => {});
     }
 
-    stopBgMusic(): void {
+    stopBgMusic() {
         if (!this._initialized) return;
         this.bgMusic.pause();
         this.bgMusic.currentTime = 0;
     }
 }
 
-class Firework implements FireworkType {
-    private phase: 'launch' | 'decelerate' | 'explode' = 'launch';
-    private readonly launchSpeed: number;
-    private readonly minSpeed: number = 0.3;
-
-    public startX: number;
-    public startY: number;
-    public targetX: number;
-    public targetY: number;
-    public distanceToTarget: number;
-    public distanceTraveled: number = 0;
-    public coordinates: number[][];
-    public angle: number;
-    public speed: number;
-    public friction: number;
-    public hue: number;
-    public brightness: number;
-    public alpha: number;
-    public decay: number = 0;
-
-    constructor(
-        public x: number,
-        public y: number,
-        targetX: number,
-        targetY: number,
-        private ctx: CanvasRenderingContext2D,
-        private soundPool: SoundPool
-    ) {
+class Firework {
+    constructor(x, y, targetX, targetY, ctx, soundPool) {
+        this.x = x;
+        this.y = y;
+        this.ctx = ctx;
+        this.soundPool = soundPool;
+        this.phase = 'launch';
         this.startX = x;
         this.startY = y;
         this.targetX = targetX;
         this.targetY = targetY;
         this.distanceToTarget = Math.sqrt(Math.pow(this.targetX - x, 2) + Math.pow(this.targetY - y, 2));
+        this.distanceTraveled = 0;
         this.coordinates = [];
         this.angle = Math.atan2(this.targetY - y, this.targetX - x);
         
@@ -121,6 +96,8 @@ class Firework implements FireworkType {
         this.hue = Math.random() * 360;
         this.brightness = Math.random() * 20 + 80;
         this.alpha = 1;
+        this.decay = 0;
+        this.minSpeed = 0.3;
 
         // 减少轨迹点数量以提高性能
         for (let i = 0; i < 4; i++) {
@@ -128,7 +105,7 @@ class Firework implements FireworkType {
         }
     }
 
-    update(particles: Particle[]): boolean {
+    update(particles) {
         // 更新轨迹
         this.coordinates.pop();
         this.coordinates.unshift([this.x, this.y]);
@@ -188,7 +165,7 @@ class Firework implements FireworkType {
         return true;
     }
 
-    draw(): void {
+    draw() {
         this.ctx.beginPath();
         this.ctx.moveTo(
             this.coordinates[this.coordinates.length - 1][0],
@@ -206,23 +183,11 @@ class Firework implements FireworkType {
     }
 }
 
-class Particle implements ParticleType {
-    public coordinates: number[][];
-    public angle: number;
-    public speed: number;
-    public friction: number;
-    public gravity: number;
-    public hue: number;
-    public brightness: number;
-    public alpha: number;
-    public decay: number;
-    
-    constructor(
-        public x: number,
-        public y: number,
-        private ctx: CanvasRenderingContext2D,
-        hue: number
-    ) {
+class Particle {
+    constructor(x, y, ctx, hue) {
+        this.x = x;
+        this.y = y;
+        this.ctx = ctx;
         this.coordinates = [];
         this.angle = Math.random() * Math.PI * 2;
         // 根据屏幕大小调整粒子速度
@@ -241,7 +206,7 @@ class Particle implements ParticleType {
         }
     }
 
-    update(): boolean {
+    update() {
         this.coordinates.pop();
         this.coordinates.unshift([this.x, this.y]);
 
@@ -253,7 +218,7 @@ class Particle implements ParticleType {
         return this.alpha >= 0.1;
     }
 
-    draw(): void {
+    draw() {
         this.ctx.beginPath();
         const lastCoord = this.coordinates[this.coordinates.length - 1];
         this.ctx.moveTo(lastCoord[0], lastCoord[1]);
@@ -270,12 +235,12 @@ class Particle implements ParticleType {
     }
 }
 
-const Fireworks: React.FC = () => {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const fireworks = useRef<Firework[]>([]);
-    const particles = useRef<Particle[]>([]);
-    const animationFrameId = useRef<number | null>(null);
-    const soundPool = useRef<SoundPool | null>(null);
+const Fireworks = () => {
+    const canvasRef = useRef(null);
+    const fireworks = useRef([]);
+    const particles = useRef([]);
+    const animationFrameId = useRef(null);
+    const soundPool = useRef(null);
     const [showHint, setShowHint] = React.useState(true);
     const [isFirstInteraction, setIsFirstInteraction] = React.useState(true);
     const [score, setScore] = React.useState(0);
@@ -334,8 +299,8 @@ const Fireworks: React.FC = () => {
             }
 
             const ctx = canvas.getContext('2d', {
-                alpha: false,  // 禁用 alpha 通道以提高性能
-                willReadFrequently: false  // 提示不会频繁读取像素
+                alpha: false,
+                willReadFrequently: false
             });
             if (!ctx) {
                 console.error('Could not get canvas context');
@@ -348,15 +313,12 @@ const Fireworks: React.FC = () => {
                     const displayWidth = window.innerWidth;
                     const displayHeight = window.innerHeight;
                     
-                    // 设置画布大小
                     canvas.width = displayWidth * dpr;
                     canvas.height = displayHeight * dpr;
                     
-                    // 设置显示大小
                     canvas.style.width = `${displayWidth}px`;
                     canvas.style.height = `${displayHeight}px`;
                     
-                    // 调整上下文缩放
                     ctx.scale(dpr, dpr);
                     
                     console.log(`Canvas size set to: ${canvas.width}x${canvas.height}, DPR: ${dpr}`);
@@ -365,7 +327,7 @@ const Fireworks: React.FC = () => {
                 }
             };
 
-            const handleInteraction = (x: number, y: number) => {
+            const handleInteraction = (x, y) => {
                 try {
                     if (isFirstInteraction) {
                         setIsFirstInteraction(false);
@@ -393,12 +355,12 @@ const Fireworks: React.FC = () => {
                 }
             };
 
-            const handleClick = (e: MouseEvent) => {
+            const handleClick = (e) => {
                 e.preventDefault();
                 handleInteraction(e.clientX, e.clientY);
             };
 
-            const handleTouch = (e: TouchEvent) => {
+            const handleTouch = (e) => {
                 e.preventDefault();
                 const touch = e.touches[0];
                 if (touch) {
@@ -411,7 +373,6 @@ const Fireworks: React.FC = () => {
             canvas.addEventListener('click', handleClick, { passive: false });
             canvas.addEventListener('touchstart', handleTouch, { passive: false });
 
-            // 动画循环
             const loop = () => {
                 try {
                     ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
@@ -461,7 +422,6 @@ const Fireworks: React.FC = () => {
 
     return (
         <div className="fixed inset-0 w-full h-full bg-black overflow-hidden">
-            {/* 计分板 */}
             <div className="fixed top-safe left-1/2 transform -translate-x-1/2 z-10 
                 px-4 py-2 mt-2 md:mt-4">
                 <div className="bg-black/30 backdrop-blur-sm px-4 py-2 rounded-full 
@@ -481,7 +441,6 @@ const Fireworks: React.FC = () => {
                 }}
             />
 
-            {/* 提示文本 */}
             {showHint && (
                 <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 
                     pointer-events-none z-10 px-4 w-full max-w-sm">
