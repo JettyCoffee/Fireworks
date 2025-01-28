@@ -9,6 +9,7 @@ class SoundPool {
     private bgMusic: HTMLAudioElement;
     private currentLaunch: number;
     private currentExplosion: number;
+    private initialized: boolean = false;
 
     constructor() {
         this.launchSounds = Array(3).fill(null).map(() => new Audio('https://cdn.pixabay.com/download/audio/2022/03/24/audio_d007e49a6e.mp3?filename=swish-6435.mp3'));
@@ -16,7 +17,11 @@ class SoundPool {
         this.bgMusic = new Audio('/sounds/haoyunlai.m4a');
         this.currentLaunch = 0;
         this.currentExplosion = 0;
+    }
 
+    initialize(): void {
+        if (this.initialized) return;
+        
         this.launchSounds.forEach(sound => {
             sound.load();
             sound.volume = 0.15;
@@ -29,43 +34,53 @@ class SoundPool {
         this.bgMusic.loop = true;
         this.bgMusic.volume = 0.4;
         this.bgMusic.load();
+        
+        this.initialized = true;
     }
 
     playLaunch(): void {
+        if (!this.initialized) return;
         const sound = this.launchSounds[this.currentLaunch];
         if (sound.currentTime > 0) {
             sound.currentTime = 0;
         }
-        void sound.play();
+        sound.play().catch(() => {});
         this.currentLaunch = (this.currentLaunch + 1) % this.launchSounds.length;
     }
 
     playExplosion(): void {
+        if (!this.initialized) return;
         const sound = this.explosionSounds[this.currentExplosion];
         if (sound.currentTime > 0) {
             sound.currentTime = 0;
         }
-        void sound.play();
+        sound.play().catch(() => {});
         this.currentExplosion = (this.currentExplosion + 1) % this.explosionSounds.length;
     }
 
     startBgMusic(): void {
-        void this.bgMusic.play();
+        if (!this.initialized) return;
+        this.bgMusic.play().catch(() => {});
     }
 
     stopBgMusic(): void {
+        if (!this.initialized) return;
         this.bgMusic.pause();
         this.bgMusic.currentTime = 0;
     }
 }
 
 class Firework implements FireworkType {
+    private phase: 'launch' | 'decelerate' | 'explode' = 'launch';
+    private readonly launchSpeed: number;
+    private readonly minSpeed: number = 0.3;
+
     public startX: number;
     public startY: number;
     public targetX: number;
     public targetY: number;
     public distanceToTarget: number;
-    public distanceTraveled: number;
+    public distanceTraveled: number = 0;
     public coordinates: number[][];
     public angle: number;
     public speed: number;
@@ -73,7 +88,7 @@ class Firework implements FireworkType {
     public hue: number;
     public brightness: number;
     public alpha: number;
-    public decay: number;
+    public decay: number = 0;
 
     constructor(
         public x: number,
@@ -85,65 +100,84 @@ class Firework implements FireworkType {
     ) {
         this.startX = x;
         this.startY = y;
-        this.targetX = targetX + (Math.random() - 0.5) * 40;
-        this.targetY = targetY + (Math.random() - 0.5) * 40;
+        this.targetX = targetX;
+        this.targetY = targetY;
         this.distanceToTarget = Math.sqrt(Math.pow(this.targetX - x, 2) + Math.pow(this.targetY - y, 2));
-        this.distanceTraveled = 0;
         this.coordinates = [];
         this.angle = Math.atan2(this.targetY - y, this.targetX - x);
-        this.speed = Math.random() * 2 + 10;
-        this.friction = 0.99;
+        
+        // 根据屏幕高度调整初始速度
+        const screenHeight = window.innerHeight;
+        this.launchSpeed = Math.min(this.distanceToTarget / (screenHeight * 0.04), 12);
+        this.speed = this.launchSpeed;
+        this.friction = 0.98;
         this.hue = Math.random() * 360;
         this.brightness = Math.random() * 20 + 80;
         this.alpha = 1;
-        this.decay = Math.random() * 0.03 + 0.02;
 
-        for (let i = 0; i < 6; i++) {
+        // 减少轨迹点数量以提高性能
+        for (let i = 0; i < 4; i++) {
             this.coordinates.push([x, y]);
         }
     }
 
     update(particles: Particle[]): boolean {
+        // 更新轨迹
         this.coordinates.pop();
         this.coordinates.unshift([this.x, this.y]);
 
-        const currentDistance = Math.sqrt(
-            Math.pow(this.x - this.startX, 2) + Math.pow(this.y - this.startY, 2)
-        );
-        const progress = currentDistance / this.distanceToTarget;
-
-        if (progress <= 0.15) {
-            this.friction = 0.99;
-        } else {
-            const slowdownProgress = (progress - 0.15) / 0.85;
-            const frictionFactor = Math.pow(slowdownProgress, 2) * 0.2;
-            this.friction = 0.99 - frictionFactor;
-            
-            if (progress > 0.8) {
-                const finalSlowdown = (progress - 0.8) / 0.2;
-                this.friction *= (1 - finalSlowdown * 0.1);
-            }
-        }
-
-        this.speed *= this.friction;
-        const vx = Math.cos(this.angle) * this.speed;
-        const vy = Math.sin(this.angle) * this.speed;
-
+        // 计算当前位置到目标的距离
         const distanceToTarget = Math.sqrt(
             Math.pow(this.targetX - this.x, 2) + Math.pow(this.targetY - this.y, 2)
         );
 
-        if (distanceToTarget < 10 || this.speed < 1.5) {
-            const particleCount = Math.floor(Math.random() * 50) + 150;
-            for (let i = 0; i < particleCount; i++) {
-                particles.push(new Particle(this.x, this.y, this.ctx, this.hue));
-            }
-            this.soundPool.playExplosion();
-            return false;
+        // 计算已经走过的距离的百分比
+        const progress = 1 - (distanceToTarget / this.distanceToTarget);
+
+        // 状态机逻辑
+        switch (this.phase) {
+            case 'launch':
+                // 前15%保持全速
+                if (progress <= 0.15) {
+                    this.speed = this.launchSpeed;
+                } else {
+                    this.phase = 'decelerate';
+                }
+                break;
+
+            case 'decelerate':
+                // 减速阶段
+                const decelerateProgress = (progress - 0.15) / 0.85;
+                // 使用三次方曲线使减速更自然
+                const speedFactor = 1 - Math.pow(decelerateProgress, 3);
+                this.speed = this.launchSpeed * speedFactor;
+
+                // 当速度降到最小值或非常接近目标点时，直接爆炸
+                if (this.speed <= this.minSpeed || distanceToTarget < 1) {
+                    this.x = this.targetX;
+                    this.y = this.targetY;
+                    this.phase = 'explode';
+                }
+                break;
+
+            case 'explode':
+                // 爆炸阶段
+                const particleCount = Math.floor(Math.random() * 50) + 150;
+                for (let i = 0; i < particleCount; i++) {
+                    particles.push(new Particle(this.x, this.y, this.ctx, this.hue));
+                }
+                this.soundPool.playExplosion();
+                return false;
         }
 
-        this.x += vx;
-        this.y += vy;
+        // 如果不是爆炸阶段，更新位置
+        if (this.phase !== 'explode') {
+            const vx = Math.cos(this.angle) * this.speed;
+            const vy = Math.sin(this.angle) * this.speed;
+            this.x += vx;
+            this.y += vy;
+        }
+
         return true;
     }
 
@@ -184,15 +218,18 @@ class Particle implements ParticleType {
     ) {
         this.coordinates = [];
         this.angle = Math.random() * Math.PI * 2;
-        this.speed = Math.random() * 8 + 4;
+        // 根据屏幕大小调整粒子速度
+        const screenSize = Math.min(window.innerWidth, window.innerHeight);
+        this.speed = Math.random() * (screenSize * 0.015) + (screenSize * 0.01);
         this.friction = 0.95;
-        this.gravity = 0.8;
+        this.gravity = 0.6;  // 降低重力效果
         this.hue = hue + Math.random() * 20 - 10;
         this.brightness = Math.random() * 30 + 70;
         this.alpha = 1;
-        this.decay = Math.random() * 0.02 + 0.01;
+        this.decay = Math.random() * 0.02 + 0.015;  // 稍微加快衰减速度
 
-        for (let i = 0; i < 8; i++) {
+        // 减少轨迹点数量
+        for (let i = 0; i < 5; i++) {
             this.coordinates.push([x, y]);
         }
     }
@@ -226,20 +263,15 @@ class Particle implements ParticleType {
     }
 }
 
-function createParticles(x: number, y: number, ctx: CanvasRenderingContext2D, particles: Particle[], hue: number) {
-    const particleCount = Math.floor(Math.random() * 50) + 100;
-    for (let i = 0; i < particleCount; i++) {
-        particles.push(new Particle(x, y, ctx, hue));
-    }
-}
-
 const Fireworks: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const fireworks = useRef<Firework[]>([]);
     const particles = useRef<Particle[]>([]);
     const animationFrameId = useRef<number | null>(null);
     const soundPool = useRef<SoundPool | null>(null);
-    const musicStarted = useRef<boolean>(false);
+    const [showHint, setShowHint] = React.useState(true);
+    const [isFirstInteraction, setIsFirstInteraction] = React.useState(true);
+    const [score, setScore] = React.useState(0);
 
     useEffect(() => {
         soundPool.current = new SoundPool();
@@ -254,6 +286,51 @@ const Fireworks: React.FC = () => {
             canvas.height = window.innerHeight;
         };
 
+        const handleInteraction = (x: number, y: number) => {
+            if (isFirstInteraction) {
+                if (soundPool.current) {
+                    soundPool.current.initialize();
+                    soundPool.current.startBgMusic();
+                }
+                setIsFirstInteraction(false);
+                setShowHint(false);
+            }
+
+            setScore(prev => prev + 1);
+
+            // 在移动端，从底部发射烟花
+            const startX = window.innerWidth / 2;
+            const startY = window.innerHeight;
+            
+            if (soundPool.current) {
+                soundPool.current.playLaunch();
+                fireworks.current.push(new Firework(
+                    startX,
+                    startY,
+                    x,
+                    y,
+                    ctx,
+                    soundPool.current
+                ));
+            }
+        };
+
+        const handleClick = (e: MouseEvent) => {
+            handleInteraction(e.clientX, e.clientY);
+        };
+
+        const handleTouch = (e: TouchEvent) => {
+            e.preventDefault(); // 防止滚动和缩放
+            const touch = e.touches[0];
+            handleInteraction(touch.clientX, touch.clientY);
+        };
+
+        setCanvasSize();
+        window.addEventListener('resize', setCanvasSize);
+        canvas.addEventListener('click', handleClick);
+        canvas.addEventListener('touchstart', handleTouch);
+
+        // 动画循环
         const loop = () => {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -279,36 +356,12 @@ const Fireworks: React.FC = () => {
             animationFrameId.current = requestAnimationFrame(loop);
         };
 
-        const handleClick = (e: MouseEvent) => {
-            if (!musicStarted.current && soundPool.current) {
-                soundPool.current.startBgMusic();
-                musicStarted.current = true;
-            }
-
-            const startX = canvas.width / 2;
-            const startY = canvas.height;
-            
-            if (soundPool.current) {
-                soundPool.current.playLaunch();
-                fireworks.current.push(new Firework(
-                    startX,
-                    startY,
-                    e.clientX,
-                    e.clientY,
-                    ctx,
-                    soundPool.current
-                ));
-            }
-        };
-
-        setCanvasSize();
-        window.addEventListener('resize', setCanvasSize);
-        canvas.addEventListener('click', handleClick);
         loop();
 
         return () => {
             window.removeEventListener('resize', setCanvasSize);
             canvas.removeEventListener('click', handleClick);
+            canvas.removeEventListener('touchstart', handleTouch);
             if (animationFrameId.current) {
                 cancelAnimationFrame(animationFrameId.current);
             }
@@ -316,17 +369,35 @@ const Fireworks: React.FC = () => {
                 soundPool.current.stopBgMusic();
             }
         };
-    }, []);
+    }, [isFirstInteraction]);
 
     return (
-        <div className="relative w-screen h-screen bg-black">
+        <div className="relative w-screen h-screen bg-black overflow-hidden">
+            {/* 计分板 */}
+            <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-10">
+                <div className="bg-black bg-opacity-30 px-4 py-2 rounded-full 
+                    flex items-center gap-2 border border-white border-opacity-10">
+                    <span className="text-white text-opacity-80">已放</span>
+                    <span className="text-white text-xl font-bold">{score}</span>
+                    <span className="text-white text-opacity-80">个烟花</span>
+                </div>
+            </div>
+
             <canvas
                 ref={canvasRef}
-                className="block"
+                className="block touch-none"
             />
-            <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white text-2xl font-sans pointer-events-none animate-pulse text-center">
-                点击屏幕任意位置放烟花
-            </div>
+
+            {/* 提示文本 */}
+            {showHint && (
+                <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 
+                    pointer-events-none z-10">
+                    <div className="bg-black bg-opacity-40 px-6 py-3 rounded-lg
+                        text-white text-xl text-center">
+                        点击屏幕放烟花
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
