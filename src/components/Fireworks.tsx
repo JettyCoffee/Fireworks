@@ -110,12 +110,16 @@ class Firework implements FireworkType {
         this.speed *= this.friction;
         const vx = Math.cos(this.angle) * this.speed;
         const vy = Math.sin(this.angle) * this.speed;
-        this.distanceTraveled = Math.sqrt(
-            Math.pow(this.x - this.startX, 2) + Math.pow(this.y - this.startY, 2)
+        
+        const distanceToTarget = Math.sqrt(
+            Math.pow(this.targetX - this.x, 2) + Math.pow(this.targetY - this.y, 2)
         );
 
-        if (this.distanceTraveled >= this.distanceToTarget) {
-            createParticles(this.targetX, this.targetY, this.ctx, particles, this.hue);
+        if (distanceToTarget < 10 || this.speed < 2) {
+            const particleCount = Math.floor(Math.random() * 50) + 150;
+            for (let i = 0; i < particleCount; i++) {
+                particles.push(new Particle(this.x, this.y, this.ctx, this.hue));
+            }
             this.soundPool.playExplosion();
             return false;
         }
@@ -158,20 +162,19 @@ class Particle implements ParticleType {
         public x: number,
         public y: number,
         private ctx: CanvasRenderingContext2D,
-        hue: number,
-        private shape: number = Math.floor(Math.random() * 3)
+        hue: number
     ) {
         this.coordinates = [];
         this.angle = Math.random() * Math.PI * 2;
-        this.speed = Math.random() * 15 + 5;
+        this.speed = Math.random() * 8 + 4;
         this.friction = 0.95;
-        this.gravity = 0.3;
+        this.gravity = 0.8;
         this.hue = hue + Math.random() * 20 - 10;
-        this.brightness = Math.random() * 20 + 80;
+        this.brightness = Math.random() * 30 + 70;
         this.alpha = 1;
-        this.decay = Math.random() * 0.015 + 0.003;
+        this.decay = Math.random() * 0.02 + 0.01;
 
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 8; i++) {
             this.coordinates.push([x, y]);
         }
     }
@@ -185,60 +188,23 @@ class Particle implements ParticleType {
         this.y += Math.sin(this.angle) * this.speed + this.gravity;
         this.alpha -= this.decay;
 
-        return this.alpha >= 0.05;
+        return this.alpha >= 0.1;
     }
 
     draw(): void {
         this.ctx.beginPath();
+        const lastCoord = this.coordinates[this.coordinates.length - 1];
+        this.ctx.moveTo(lastCoord[0], lastCoord[1]);
+        this.ctx.lineTo(this.x, this.y);
         
-        switch(this.shape) {
-            case 0:
-                this.drawStar();
-                break;
-            case 1:
-                this.drawCircle();
-                break;
-            case 2:
-                this.drawSparkle();
-                break;
-        }
+        this.ctx.strokeStyle = `hsla(${this.hue}, 100%, ${this.brightness}%, ${this.alpha})`;
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
 
-        this.ctx.shadowBlur = 15;
-        this.ctx.shadowColor = `hsla(${this.hue}, 100%, ${this.brightness}%, ${this.alpha})`;
+        this.ctx.beginPath();
+        this.ctx.arc(this.x, this.y, 1.2, 0, Math.PI * 2);
         this.ctx.fillStyle = `hsla(${this.hue}, 100%, ${this.brightness}%, ${this.alpha})`;
         this.ctx.fill();
-        this.ctx.shadowBlur = 0;
-    }
-
-    private drawStar(): void {
-        const size = 2;
-        for (let i = 0; i < 5; i++) {
-            const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
-            const x = this.x + Math.cos(angle) * size;
-            const y = this.y + Math.sin(angle) * size;
-            if (i === 0) {
-                this.ctx.moveTo(x, y);
-            } else {
-                this.ctx.lineTo(x, y);
-            }
-        }
-        this.ctx.closePath();
-    }
-
-    private drawCircle(): void {
-        this.ctx.arc(this.x, this.y, 1.5, 0, Math.PI * 2);
-    }
-
-    private drawSparkle(): void {
-        const size = 2;
-        for (let i = 0; i < 4; i++) {
-            const angle = (Math.PI / 2) * i;
-            this.ctx.moveTo(this.x, this.y);
-            this.ctx.lineTo(
-                this.x + Math.cos(angle) * size,
-                this.y + Math.sin(angle) * size
-            );
-        }
     }
 }
 
@@ -271,7 +237,7 @@ const Fireworks: React.FC = () => {
         };
 
         const loop = () => {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             let i = fireworks.current.length;
