@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { FireworkType, ParticleType } from '../types/firework';
+import bgMusic from '../../public/sounds/haoyunlai.m4a';
 
 class SoundPool {
     private launchSound: HTMLAudioElement;
@@ -10,10 +11,11 @@ class SoundPool {
     private initialized: boolean = false;
 
     constructor() {
-        // 使用单个音频实例
-        this.launchSound = new Audio('/sounds/haoyunlai.m4a');
-        this.explosionSound = new Audio('/sounds/haoyunlai.m4a');
-        this.bgMusic = new Audio('/sounds/haoyunlai.m4a');
+        // 使用导入的资源路径
+        const audioPath = bgMusic as unknown as string;
+        this.launchSound = new Audio(audioPath);
+        this.explosionSound = new Audio(audioPath);
+        this.bgMusic = new Audio(audioPath);
     }
 
     initialize(): void {
