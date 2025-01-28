@@ -91,8 +91,8 @@ class Firework implements FireworkType {
         this.distanceTraveled = 0;
         this.coordinates = [];
         this.angle = Math.atan2(this.targetY - y, this.targetX - x);
-        this.speed = Math.random() * 3 + 8;
-        this.friction = 0.98;
+        this.speed = Math.random() * 2 + 10;
+        this.friction = 0.99;
         this.hue = Math.random() * 360;
         this.brightness = Math.random() * 20 + 80;
         this.alpha = 1;
@@ -107,15 +107,33 @@ class Firework implements FireworkType {
         this.coordinates.pop();
         this.coordinates.unshift([this.x, this.y]);
 
+        const currentDistance = Math.sqrt(
+            Math.pow(this.x - this.startX, 2) + Math.pow(this.y - this.startY, 2)
+        );
+        const progress = currentDistance / this.distanceToTarget;
+
+        if (progress <= 0.15) {
+            this.friction = 0.99;
+        } else {
+            const slowdownProgress = (progress - 0.15) / 0.85;
+            const frictionFactor = Math.pow(slowdownProgress, 2) * 0.2;
+            this.friction = 0.99 - frictionFactor;
+            
+            if (progress > 0.8) {
+                const finalSlowdown = (progress - 0.8) / 0.2;
+                this.friction *= (1 - finalSlowdown * 0.1);
+            }
+        }
+
         this.speed *= this.friction;
         const vx = Math.cos(this.angle) * this.speed;
         const vy = Math.sin(this.angle) * this.speed;
-        
+
         const distanceToTarget = Math.sqrt(
             Math.pow(this.targetX - this.x, 2) + Math.pow(this.targetY - this.y, 2)
         );
 
-        if (distanceToTarget < 10 || this.speed < 2) {
+        if (distanceToTarget < 10 || this.speed < 1.5) {
             const particleCount = Math.floor(Math.random() * 50) + 150;
             for (let i = 0; i < particleCount; i++) {
                 particles.push(new Particle(this.x, this.y, this.ctx, this.hue));
