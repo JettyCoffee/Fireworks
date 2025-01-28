@@ -2,15 +2,28 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import bgMusic from '../../public/sounds/haoyunlai.m4a';
+import launchSound from '../../public/sounds/launch.mp3';
+import explosionSound from '../../public/sounds/explosion.mp3';
 
 class SoundPool {
     constructor() {
-        // 使用导入的资源路径
-        const audioPath = bgMusic;
-        this.launchSound = new Audio(audioPath);
-        this.explosionSound = new Audio(audioPath);
-        this.bgMusic = new Audio(audioPath);
+        this.launchSound = new Audio(launchSound);
+        this.explosionSound = new Audio(explosionSound);
+        this.bgMusic = new Audio(bgMusic);
         this._initialized = false;
+        
+        // 预加载所有音频
+        this.launchSound.preload = 'auto';
+        this.explosionSound.preload = 'auto';
+        this.bgMusic.preload = 'auto';
+        
+        // 设置音量
+        this.launchSound.volume = 0.3;
+        this.explosionSound.volume = 0.4;
+        this.bgMusic.volume = 0.2;
+        
+        // 设置背景音乐循环
+        this.bgMusic.loop = true;
     }
 
     get initialized() {
@@ -21,16 +34,21 @@ class SoundPool {
         if (this._initialized) return;
         
         try {
-            // 设置音量
-            this.launchSound.volume = 0.15;
-            this.explosionSound.volume = 0.2;
-            this.bgMusic.volume = 0.4;
-            this.bgMusic.loop = true;
-
-            // 预加载背景音乐
-            this.bgMusic.load();
+            // 创建音频上下文
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            this.audioContext = new AudioContext();
             
-            this._initialized = true;
+            // 加载所有音频
+            Promise.all([
+                this.bgMusic.load(),
+                this.launchSound.load(),
+                this.explosionSound.load()
+            ]).then(() => {
+                console.log('All audio files loaded');
+                this._initialized = true;
+            }).catch(error => {
+                console.error('Error loading audio files:', error);
+            });
         } catch (error) {
             console.error('Error initializing audio:', error);
         }
@@ -39,10 +57,15 @@ class SoundPool {
     playLaunch() {
         if (!this._initialized) return;
         try {
-            // 克隆音频对象以实现同时播放
             const sound = this.launchSound.cloneNode();
-            sound.volume = 0.15;
-            sound.play().catch(() => {});
+            sound.volume = 0.3;
+            sound.currentTime = 0;
+            const playPromise = sound.play();
+            if (playPromise) {
+                playPromise.catch(error => {
+                    console.error('Error playing launch sound:', error);
+                });
+            }
         } catch (error) {
             console.error('Error playing launch sound:', error);
         }
@@ -51,10 +74,15 @@ class SoundPool {
     playExplosion() {
         if (!this._initialized) return;
         try {
-            // 克隆音频对象以实现同时播放
             const sound = this.explosionSound.cloneNode();
-            sound.volume = 0.2;
-            sound.play().catch(() => {});
+            sound.volume = 0.4;
+            sound.currentTime = 0;
+            const playPromise = sound.play();
+            if (playPromise) {
+                playPromise.catch(error => {
+                    console.error('Error playing explosion sound:', error);
+                });
+            }
         } catch (error) {
             console.error('Error playing explosion sound:', error);
         }
@@ -62,13 +90,36 @@ class SoundPool {
 
     startBgMusic() {
         if (!this._initialized) return;
-        this.bgMusic.play().catch(() => {});
+        try {
+            // 确保从头开始播放
+            this.bgMusic.currentTime = 0;
+            const playPromise = this.bgMusic.play();
+            if (playPromise) {
+                playPromise.catch(error => {
+                    console.error('Error playing background music:', error);
+                    // 如果自动播放失败，等待用户交互再次尝试
+                    const resumeAudio = () => {
+                        this.bgMusic.play().catch(console.error);
+                        document.removeEventListener('click', resumeAudio);
+                        document.removeEventListener('touchstart', resumeAudio);
+                    };
+                    document.addEventListener('click', resumeAudio);
+                    document.addEventListener('touchstart', resumeAudio);
+                });
+            }
+        } catch (error) {
+            console.error('Error starting background music:', error);
+        }
     }
 
     stopBgMusic() {
         if (!this._initialized) return;
-        this.bgMusic.pause();
-        this.bgMusic.currentTime = 0;
+        try {
+            this.bgMusic.pause();
+            this.bgMusic.currentTime = 0;
+        } catch (error) {
+            console.error('Error stopping background music:', error);
+        }
     }
 }
 
@@ -273,17 +324,26 @@ const Fireworks = () => {
             const initAudio = async () => {
                 try {
                     soundPool.current = new SoundPool();
+                    
                     // 统一处理用户交互初始化音频
                     const initOnInteraction = () => {
                         if (soundPool.current && !soundPool.current.initialized) {
                             soundPool.current.initialize();
+                        }
+                    };
+
+                    // 处理背景音乐播放
+                    const startBgMusic = () => {
+                        if (soundPool.current && soundPool.current.initialized) {
                             soundPool.current.startBgMusic();
                         }
                     };
                     
                     // 添加多个事件监听
-                    ['touchstart', 'click', 'touchend'].forEach(eventType => {
+                    ['touchstart', 'click'].forEach(eventType => {
                         document.addEventListener(eventType, initOnInteraction, { once: true });
+                        // 背景音乐需要用户交互才能播放
+                        document.addEventListener(eventType, startBgMusic, { once: true });
                     });
                 } catch (error) {
                     console.error('Error initializing audio:', error);
